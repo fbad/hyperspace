@@ -22,7 +22,7 @@ import org.apache.spark.sql.internal.SQLConf
 
 import com.microsoft.hyperspace.HyperspaceException
 import com.microsoft.hyperspace.actions._
-import com.microsoft.hyperspace.util.HyperspaceConf
+import com.microsoft.hyperspace.index.IndexConstants.{REFRESH_MODE_FULL, REFRESH_MODE_INCREMENTAL}
 
 class IndexCollectionManager(
     spark: SparkSession,
@@ -63,17 +63,25 @@ class IndexCollectionManager(
     }
   }
 
-  override def refresh(indexName: String): Unit = {
+  override def refresh(indexName: String, mode: String): Unit = {
     withLogManager(indexName) { logManager =>
       val indexPath = PathResolver(spark.sessionState.conf).getIndexPath(indexName)
       val dataManager = indexDataManagerFactory.create(indexPath)
-      if (HyperspaceConf.refreshDeleteEnabled(spark)) {
-        new RefreshDeleteAction(spark, logManager, dataManager).run()
-      } else if (HyperspaceConf.refreshAppendEnabled(spark)) {
-        new RefreshAppendAction(spark, logManager, dataManager).run()
-      } else {
+      if (mode.equalsIgnoreCase(REFRESH_MODE_INCREMENTAL)) {
+        new RefreshIncrementalAction(spark, logManager, dataManager).run()
+      } else if (mode.equalsIgnoreCase(REFRESH_MODE_FULL)) {
         new RefreshAction(spark, logManager, dataManager).run()
+      } else {
+        throw HyperspaceException(s"Unsupported refresh mode '$mode' found.")
       }
+    }
+  }
+
+  override def optimize(indexName: String, mode: String): Unit = {
+    withLogManager(indexName) { logManager =>
+      val indexPath = PathResolver(spark.sessionState.conf).getIndexPath(indexName)
+      val dataManager = indexDataManagerFactory.create(indexPath)
+      new OptimizeAction(spark, logManager, dataManager, mode).run()
     }
   }
 

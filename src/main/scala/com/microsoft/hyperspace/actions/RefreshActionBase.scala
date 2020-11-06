@@ -17,6 +17,7 @@
 package com.microsoft.hyperspace.actions
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation, PartitioningAwareFileIndex}
 import org.apache.spark.sql.types.{DataType, StructType}
 
 import com.microsoft.hyperspace.HyperspaceException
@@ -47,6 +48,20 @@ private[actions] abstract class RefreshActionBase(
 
   protected lazy val previousIndexLogEntry = previousLogEntry.asInstanceOf[IndexLogEntry]
 
+  // Refresh maintains the same number of buckets as the existing index to be consistent
+  // throughout all index versions. For "full" refresh mode, we could allow to change configs
+  // like num buckets or lineage column as it is newly building the index data. This might
+  // be done with a different refresh mode if necessary.
+  override protected final def numBucketsForIndex(spark: SparkSession): Int = {
+    previousIndexLogEntry.numBuckets
+  }
+
+  // Refresh maintains the same lineage column config as the existing index.
+  // See above getNumBucketsConfig for more detail.
+  override protected final def indexLineageEnabled(spark: SparkSession): Boolean = {
+    previousIndexLogEntry.hasLineageColumn(spark)
+  }
+
   // Reconstruct a df from schema
   protected lazy val df = {
     val rels = previousIndexLogEntry.relations
@@ -75,5 +90,53 @@ private[actions] abstract class RefreshActionBase(
         s"Refresh is only supported in $ACTIVE state. " +
           s"Current index state is ${previousIndexLogEntry.state}")
     }
+  }
+
+  /**
+   * Compare list of source data files from previous IndexLogEntry to list
+   * of current source data files, validate fileInfo for existing files and
+   * identify deleted source data files.
+   * Finally, append the previously known deleted files to the result. These
+   * are the files for which the index was never updated in the past.
+   */
+  protected lazy val deletedFiles: Seq[FileInfo] = {
+    val relation = previousIndexLogEntry.relations.head
+    val originalFiles = relation.data.properties.content.fileInfos
+
+    (originalFiles -- currentFiles).toSeq
+  }
+
+  /**
+   * Retrieve the source file list from reconstructed "df" for refresh.
+   * Build Set[FileInfo] to compare the source file list with the previous index version.
+   */
+  protected lazy val currentFiles: Set[FileInfo] = {
+    df.queryExecution.optimizedPlan
+      .collect {
+        case LogicalRelation(
+            HadoopFsRelation(location: PartitioningAwareFileIndex, _, _, _, _, _),
+            _,
+            _,
+            _) =>
+          location
+            .allFiles()
+            .map(f => FileInfo(f.getPath.toString, f.getLen, f.getModificationTime))
+      }
+      .flatten
+      .toSet
+  }
+
+  /**
+   * Compare list of source data files from previous IndexLogEntry to list
+   * of current source data files, validate fileInfo for existing files and
+   * identify newly appended source data files.
+   * Finally, append the previously known appended files to the result. These
+   * are the files for which index was never updated in the past.
+   */
+  protected lazy val appendedFiles: Seq[FileInfo] = {
+    val relation = previousIndexLogEntry.relations.head
+    val originalFiles = relation.data.properties.content.fileInfos
+
+    (currentFiles -- originalFiles).toSeq
   }
 }

@@ -94,7 +94,13 @@ object Content {
    * @param files List of leaf files.
    * @return Content object with Directory tree from leaf files.
    */
-  def fromLeafFiles(files: Seq[FileStatus]): Content = Content(Directory.fromLeafFiles(files))
+  def fromLeafFiles(files: Seq[FileStatus]): Option[Content] = {
+    if (files.nonEmpty) {
+      Some(Content(Directory.fromLeafFiles(files)))
+    } else {
+      None
+    }
+  }
 }
 
 /**
@@ -320,15 +326,41 @@ object LogicalPlanFingerprint {
   case class Properties(signatures: Seq[Signature])
 }
 
+/**
+ * Captures any HDFS updates.
+ *
+ * @param appendedFiles Appended files.
+ * @param deletedFiles Deleted files.
+ */
+case class Update(
+    appendedFiles: Option[Content] = None,
+    deletedFiles: Option[Content] = None)
+
 // IndexLogEntry-specific Hdfs that represents the source data.
 case class Hdfs(properties: Hdfs.Properties) {
   val kind = "HDFS"
 }
 object Hdfs {
-  case class Properties(content: Content)
+
+  /**
+   * Hdfs file properties.
+   * @param content Content object representing Hdfs file based data source.
+   * @param update Captures any updates since 'content' was created.
+   */
+  case class Properties(content: Content, update: Option[Update] = None)
 }
 
-// IndexLogEntry-specific Relation that represents the source relation.
+/**
+ * IndexLogEntry-specific Relation that represents the source relation.
+ *
+ * @param rootPaths List of root paths for the source relation.
+ * @param data Source data for the relation.
+ *             Hdfs.properties.content captures source data which derived dataset was created from.
+ *             Hdfs.properties.update captures any updates since the derived dataset was created.
+ * @param dataSchemaJson Schema in json format.
+ * @param fileFormat File format name.
+ * @param options Options to read the source relation.
+ */
 case class Relation(
     rootPaths: Seq[String],
     data: Hdfs,
@@ -372,11 +404,46 @@ case class IndexLogEntry(
     source.plan.properties.relations
   }
 
+  // FileInfo's 'name' contains the full path to the file.
   @JsonIgnore
-  lazy val allSourceFileInfos: Set[FileInfo] = {
-    relations
-      .flatMap(_.data.properties.content.fileInfos)
-      .toSet
+  lazy val sourceFileInfoSet: Set[FileInfo] = {
+    relations.head.data.properties.content.fileInfos
+  }
+
+  def sourceUpdate: Option[Update] = {
+    relations.head.data.properties.update
+  }
+
+  // FileInfo's 'name' contains the full path to the file.
+  def appendedFiles: Set[FileInfo] = {
+    sourceUpdate.flatMap(_.appendedFiles).map(_.fileInfos).getOrElse(Set())
+  }
+
+  // FileInfo's 'name' contains the full path to the file.
+  def deletedFiles: Set[FileInfo] = {
+    sourceUpdate.flatMap(_.deletedFiles).map(_.fileInfos).getOrElse(Set())
+  }
+
+  def copyWithUpdate(
+      latestFingerprint: LogicalPlanFingerprint,
+      appended: Seq[FileInfo],
+      deleted: Seq[FileInfo]): IndexLogEntry = {
+    def toFileStatus(f: FileInfo) = {
+      new FileStatus(f.size, false, 0, 1, f.modifiedTime, new Path(f.name))
+    }
+    copy(
+      source = source.copy(
+        plan = source.plan.copy(
+          properties = source.plan.properties.copy(
+            fingerprint = latestFingerprint,
+            relations = Seq(
+              relations.head.copy(
+                data = relations.head.data.copy(
+                  properties = relations.head.data.properties.copy(
+                    update = Some(
+                      Update(
+                        appendedFiles = Content.fromLeafFiles(appended.map(toFileStatus)),
+                        deletedFiles = Content.fromLeafFiles(deleted.map(toFileStatus))))))))))))
   }
 
   def bucketSpec: BucketSpec =

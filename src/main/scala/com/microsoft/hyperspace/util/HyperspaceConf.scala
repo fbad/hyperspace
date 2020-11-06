@@ -32,17 +32,61 @@ object HyperspaceConf {
       .toBoolean
   }
 
-  def refreshDeleteEnabled(spark: SparkSession): Boolean = {
+  def hybridScanDeleteEnabled(spark: SparkSession): Boolean = {
     spark.conf
-      .get(IndexConstants.REFRESH_DELETE_ENABLED,
-        IndexConstants.REFRESH_DELETE_ENABLED_DEFAULT)
+      .get(
+        IndexConstants.INDEX_HYBRID_SCAN_DELETE_ENABLED,
+        IndexConstants.INDEX_HYBRID_SCAN_DELETE_ENABLED_DEFAULT)
       .toBoolean
   }
 
-  def refreshAppendEnabled(spark: SparkSession): Boolean = {
+  def optimizeFileSizeThreshold(spark: SparkSession): Long = {
     spark.conf
-      .get(IndexConstants.REFRESH_APPEND_ENABLED,
-        IndexConstants.REFRESH_APPEND_ENABLED_DEFAULT)
+      .get(
+        IndexConstants.OPTIMIZE_FILE_SIZE_THRESHOLD,
+        IndexConstants.OPTIMIZE_FILE_SIZE_THRESHOLD_DEFAULT.toString)
+      .toLong
+  }
+
+  def hybridScanDeleteMaxNumFiles(spark: SparkSession): Int = {
+    spark.conf
+      .get(
+        IndexConstants.INDEX_HYBRID_SCAN_DELETE_MAX_NUM_FILES,
+        IndexConstants.INDEX_HYBRID_SCAN_DELETE_MAX_NUM_FILES_DEFAULT)
+      .toInt
+  }
+
+  def numBucketsForIndex(spark: SparkSession): Int = {
+    getConfStringWithMultipleKeys(
+      spark,
+      Seq(IndexConstants.INDEX_NUM_BUCKETS, IndexConstants.INDEX_NUM_BUCKETS_LEGACY),
+      IndexConstants.INDEX_NUM_BUCKETS_DEFAULT.toString).toInt
+  }
+
+  def indexLineageEnabled(spark: SparkSession): Boolean = {
+    spark.sessionState.conf
+      .getConfString(
+        IndexConstants.INDEX_LINEAGE_ENABLED,
+        IndexConstants.INDEX_LINEAGE_ENABLED_DEFAULT)
       .toBoolean
+  }
+
+  /**
+   * Returns the config value whose key matches the first key given multiple keys. If no keys are
+   * matched, the given default value is returned.
+   *
+   * @param spark Spark session.
+   * @param keys Config keys to look up.
+   * @param defaultValue Default value to fall back if no config keys are matched.
+   * @return Config value found. 'default' if no config value is found for the given keys.
+   */
+  private def getConfStringWithMultipleKeys(
+      spark: SparkSession,
+      keys: Seq[String],
+      defaultValue: String): String = {
+    keys
+      .find(spark.sessionState.conf.contains)
+      .map(spark.sessionState.conf.getConfString)
+      .getOrElse(defaultValue)
   }
 }
