@@ -21,7 +21,7 @@ sparkVersion := "3.0.0"
 scalaVersion := "2.12.10"
 
 libraryDependencies ++= Seq(
-  "io.delta" %% "delta-core" % "0.6.1" % "provided" withSources(),
+  "io.delta" %% "delta-core" % "0.7.0" % "provided" withSources(),
   "org.apache.spark" %% "spark-sql" % sparkVersion.value % "provided" withSources(),
   "org.apache.spark" %% "spark-core" % sparkVersion.value % "provided" withSources(),
   "org.apache.spark" %% "spark-catalyst" % sparkVersion.value % "provided" withSources(),
