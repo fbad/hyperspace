@@ -110,7 +110,7 @@ class RuleUtilsTest extends HyperspaceRuleTestSuite with SQLHelper {
   }
 
   test("Verify get logical relation for non-linear plan.") {
-    val joinNode = Join(t1ProjectNode, t2ProjectNode, JoinType("inner"), None)
+    val joinNode = Join(t1ProjectNode, t2ProjectNode, JoinType("inner"), None, JoinHint.NONE)
     val r = RuleUtils.getLogicalRelation(Project(Seq(t1c3, t2c3), joinNode))
     assert(r.isEmpty)
   }

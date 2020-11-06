@@ -16,15 +16,9 @@
 
 name := "hyperspace-core"
 
-sparkVersion := "2.4.2"
+sparkVersion := "3.0.0"
 
-lazy val scala212 = "2.12.8"
-lazy val scala211 = "2.11.12"
-lazy val supportedScalaVersions = List(scala212, scala211)
-
-scalaVersion := scala212
-
-crossScalaVersions := supportedScalaVersions
+scalaVersion := "2.12.10"
 
 libraryDependencies ++= Seq(
   "io.delta" %% "delta-core" % "0.6.1" % "provided" withSources(),
@@ -68,8 +62,8 @@ testScalastyle := scalastyle.in(Test).toTask("").value
 (test in Test) := ((test in Test) dependsOn testScalastyle).value
 
 /***************************
-* Spark Packages settings *
-***************************/
+ * Spark Packages settings *
+ ***************************/
 
 spName := "microsoft/hyperspace-core"
 

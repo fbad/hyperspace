@@ -56,7 +56,7 @@ object JoinIndexRule
     with HyperspaceEventLogging
     with ActiveSparkSession {
   def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
-    case join @ Join(l, r, _, Some(condition)) if isApplicable(l, r, condition) =>
+    case join @ Join(l, r, _, Some(condition), _) if isApplicable(l, r, condition) =>
       try {
         getBestIndexPair(l, r, condition)
           .map {
