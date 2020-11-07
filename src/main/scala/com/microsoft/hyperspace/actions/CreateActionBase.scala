@@ -127,7 +127,7 @@ private[actions] abstract class CreateActionBase(dataManager: IndexDataManager) 
           _) =>
         val files = location
           .getSnapshot(stalenessAcceptable = false)
-          .filesForScan(projection = Nil, location.partitionFilters, keepStats = false)
+          .filesForScan(projection = Nil, location.partitionFilters)
           .files
           .map { f =>
             new FileStatus(
