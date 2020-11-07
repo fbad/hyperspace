@@ -70,7 +70,6 @@ private[actions] abstract class RefreshActionBase(
       // Exclude "versionAsOf" and "timestampAsOf" options, so that this DataFrame for refresh
       // can see the latest snapshot.
       spark.read
-        .schema(dataSchema)
         .format(rel.fileFormat)
         .options(rel.options - "versionAsOf" - "timestampAsOf")
         .load(rel.rootPaths.head)
